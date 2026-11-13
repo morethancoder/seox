@@ -1,0 +1,5 @@
+{"rows":[
+ {"keys":["https://www.example.com/"],"clicks":95,"impressions":2400,"ctr":0.04,"position":4.9},
+ {"keys":["https://www.example.com/blog/checklist"],"clicks":25,"impressions":720,"ctr":0.035,"position":8.1},
+ {"keys":["https://www.example.com/old"],"clicks":14,"impressions":300,"ctr":0.047,"position":7.0}
+]}

@@ -1,0 +1,9 @@
+/seox
+/dist/
+coverage.out
+.playwright/
+*.secret.json
+client_secret*.json
+.env
+.out/
+!testdata/mine/client_secret.json

@@ -1,0 +1,5 @@
+{"siteEntry":[
+ {"siteUrl":"https://other.org/","permissionLevel":"siteOwner"},
+ {"siteUrl":"http://www.example.com/","permissionLevel":"siteOwner"},
+ {"siteUrl":"https://www.example.com/","permissionLevel":"siteFullUser"}
+]}

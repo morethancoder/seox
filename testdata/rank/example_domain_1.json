@@ -1,0 +1,5 @@
+{"query":"example domain","number_of_results":0,"results":[
+{"url":"https://en.wikipedia.org/wiki/Example.com","title":"Example.com - Wikipedia","engine":"google","engines":["google","bing"],"positions":[1,1],"category":"general"},
+{"url":"https://www.iana.org/domains/reserved","title":"IANA reserved domains","engine":"bing","engines":["bing"],"positions":[2],"category":"general"},
+{"url":"https://example.org/","title":"Example Org","engine":"google","engines":["google"],"positions":[2],"category":"general"}],
+"unresponsive_engines":[["brave","too many requests"]]}

@@ -1,0 +1,5 @@
+{"d":[
+ {"__type":"Site:#Microsoft.Bing.Webmaster.Api","AuthenticationCode":"abc","DnsVerificationCode":"def","IsVerified":true,"Url":"https://www.example.com/"},
+ {"__type":"Site:#Microsoft.Bing.Webmaster.Api","IsVerified":false,"Url":"http://example.com/"},
+ {"__type":"Site:#Microsoft.Bing.Webmaster.Api","IsVerified":true,"Url":"https://other.org/"}
+]}

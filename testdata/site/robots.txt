@@ -1,0 +1,8 @@
+# the seox group wins over *
+User-agent: *
+Disallow: /
+
+User-agent: seox
+Disallow: /secret/
+Allow: /secret/open
+Sitemap: https://example.com/sitemap.xml

@@ -1,0 +1,4 @@
+{"d":{"__type":"LinkCounts:#Microsoft.Bing.Webmaster.Api","Links":[
+ {"__type":"LinkCount:#Microsoft.Bing.Webmaster.Api","Count":4,"Url":"https://www.example.com/blog/audit"},
+ {"__type":"LinkCount:#Microsoft.Bing.Webmaster.Api","Count":25,"Url":"https://www.example.com/"}
+],"TotalPages":2}}

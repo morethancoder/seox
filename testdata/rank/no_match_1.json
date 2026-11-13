@@ -1,0 +1,4 @@
+{"query":"nothing here","results":[
+{"url":"https://a.test/","title":"A","engine":"bing","engines":["bing"],"positions":[1],"category":"general"},
+{"url":"https://b.test/","title":"B","engine":"google","engines":["google"],"positions":[1],"category":"general"}],
+"unresponsive_engines":[["brave","too many requests"],["qwant","CAPTCHA"]]}

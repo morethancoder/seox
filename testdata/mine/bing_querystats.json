@@ -1,0 +1,7 @@
+{"d":[
+ {"__type":"QueryStats:#Microsoft.Bing.Webmaster.Api","AvgClickPosition":3,"AvgImpressionPosition":4,"Clicks":10,"Date":"\/Date(1792454400000)\/","Impressions":200,"Query":"seo tools"},
+ {"__type":"QueryStats:#Microsoft.Bing.Webmaster.Api","AvgClickPosition":3,"AvgImpressionPosition":6,"Clicks":6,"Date":"\/Date(1793059200000)\/","Impressions":100,"Query":"seo tools"},
+ {"__type":"QueryStats:#Microsoft.Bing.Webmaster.Api","AvgClickPosition":-1,"AvgImpressionPosition":11,"Clicks":1,"Date":"\/Date(1792454400000)\/","Impressions":120,"Query":"bing only phrase"},
+ {"__type":"QueryStats:#Microsoft.Bing.Webmaster.Api","AvgClickPosition":2,"AvgImpressionPosition":3,"Clicks":30,"Date":"\/Date(1790035200000)\/","Impressions":400,"Query":"seo tools"},
+ {"__type":"QueryStats:#Microsoft.Bing.Webmaster.Api","AvgClickPosition":2,"AvgImpressionPosition":5,"Clicks":9,"Date":"\/Date(1790640000000)\/","Impressions":150,"Query":"bing only phrase"}
+]}
