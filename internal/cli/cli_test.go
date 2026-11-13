@@ -203,3 +203,17 @@ func TestDoctorRuns(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeAreaChecksRefusesBuiltinName(t *testing.T) {
+	out := map[string]check{"searxng": {OK: true}}
+	mergeAreaChecks(out, map[string]ops.Check{"lighthouse": {OK: true}})
+	if _, ok := out["lighthouse"]; !ok {
+		t.Fatal("area check not merged")
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on name clash")
+		}
+	}()
+	mergeAreaChecks(out, map[string]ops.Check{"searxng": {}})
+}

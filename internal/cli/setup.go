@@ -153,10 +153,6 @@ func doctor(ctx context.Context, _ ops.Input) (*ops.Result, error) {
 
 	out["searxng"] = searxngCheck(ctx, cfg)
 
-	for name, c := range ops.DoctorChecks() {
-		out[name] = check{c.OK, c.Detail, c.Fix}
-	}
-
 	switch dir := cfg.ReportDir; {
 	case dir == "":
 		out["report_dir"] = check{false, "not set: reports go to the current folder", "seox config set report_dir <folder>"}
@@ -167,7 +163,19 @@ func doctor(ctx context.Context, _ ops.Input) (*ops.Result, error) {
 			out["report_dir"] = check{true, dir, ""}
 		}
 	}
+	mergeAreaChecks(out, ops.DoctorChecks())
 	return &ops.Result{Data: map[string]any{"version": Version, "home": config.Home(), "checks": out}, Meta: ops.Meta{Source: "local"}}, nil
+}
+
+// mergeAreaChecks adds area checks after all built-in ones. A clash panics (a programming error
+// caught by any doctor test) rather than letting an area silently replace a built-in line.
+func mergeAreaChecks(out map[string]check, area map[string]ops.Check) {
+	for name, c := range area {
+		if _, dup := out[name]; dup {
+			panic("seox doctor: area check name clashes with a built-in check: " + name)
+		}
+		out[name] = check{c.OK, c.Detail, c.Fix}
+	}
 }
 
 // searxngCheck looks for the configured SearXNG, else Arshafa's install. It never starts anything.

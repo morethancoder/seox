@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -150,5 +151,31 @@ func TestSpeedNoCruxAnswerIsCached(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Errorf("PSI called %d times, want 1 (no-CrUX answer cached)", calls)
+	}
+}
+
+func TestTailWriterKeepsLast(t *testing.T) {
+	w := &tailWriter{max: 4}
+	w.Write([]byte("abc"))
+	w.Write([]byte("defg"))
+	if n, _ := w.Write([]byte("h")); n != 1 {
+		t.Fatal("short write")
+	}
+	if got := w.String(); got != "efgh" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestProfilePatternExact(t *testing.T) {
+	re := regexp.MustCompile(profilePattern("/tmp/seox-chrome-12345678"))
+	if !re.MatchString("chrome --headless --user-data-dir=/tmp/seox-chrome-12345678 --foo") ||
+		!re.MatchString("chrome --user-data-dir=/tmp/seox-chrome-12345678") {
+		t.Fatal("should match own profile")
+	}
+	if re.MatchString("chrome --user-data-dir=/tmp/seox-chrome-123456789 --foo") {
+		t.Fatal("must not match a longer name")
+	}
+	if re.MatchString("chrome --user-data-dir=/tmp/seox-chromeX12345678") {
+		t.Fatal("dot-like metacharacters must be escaped")
 	}
 }

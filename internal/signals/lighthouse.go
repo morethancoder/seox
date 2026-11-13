@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -89,6 +90,23 @@ func (w *capWriter) Write(p []byte) (int, error) {
 	return w.buf.Write(p)
 }
 
+// tailWriter keeps only the last max bytes written, so the real error survives npm noise
+// printed first. It keeps draining so the child is never blocked.
+type tailWriter struct {
+	buf []byte
+	max int
+}
+
+func (w *tailWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	if len(w.buf) > w.max {
+		w.buf = append(w.buf[:0], w.buf[len(w.buf)-w.max:]...)
+	}
+	return len(p), nil
+}
+
+func (w *tailWriter) String() string { return string(w.buf) }
+
 // runLocalLighthouse runs one Lighthouse performance audit in headless Chrome and parses it
 // like a PSI lighthouseResult. The process group is killed when ctx ends.
 func runLocalLighthouse(ctx context.Context, pageURL, strategy string) (*PSIResult, error) {
@@ -134,7 +152,7 @@ func runLocalLighthouse(ctx context.Context, pageURL, strategy string) (*PSIResu
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 5 * time.Second
-	out, errOut := &capWriter{max: lighthouseMaxOut}, &capWriter{max: 4096}
+	out, errOut := &capWriter{max: lighthouseMaxOut}, &tailWriter{max: 4096}
 	cmd.Stdout, cmd.Stderr = out, errOut
 	runErr := cmd.Run()
 	// Whatever happened, make sure nothing started from this run's profile survives.
@@ -148,7 +166,7 @@ func runLocalLighthouse(ctx context.Context, pageURL, strategy string) (*PSIResu
 	if runErr != nil {
 		var ee *exec.ExitError
 		if errors.As(runErr, &ee) || errors.Is(runErr, exec.ErrWaitDelay) {
-			msg := strings.TrimSpace(errOut.buf.String())
+			msg := strings.TrimSpace(errOut.String())
 			if len(msg) > 300 {
 				msg = msg[len(msg)-300:]
 			}
@@ -211,5 +229,11 @@ func killProfileProcs(cmd *exec.Cmd, profile string) {
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
-	_ = exec.Command("pkill", "-KILL", "-f", "--", profile).Run()
+	_ = exec.Command("pkill", "-KILL", "-f", "--", profilePattern(profile)).Run()
+}
+
+// profilePattern matches the exact --user-data-dir=<profile> argument, so a run whose temp name is
+// a prefix of another run's cannot kill that run's Chrome.
+func profilePattern(profile string) string {
+	return "--user-data-dir=" + regexp.QuoteMeta(profile) + "( |$)"
 }
