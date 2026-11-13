@@ -22,7 +22,7 @@ seox doctor         # state of every source, with a fix for each
 | `seox keywords <site>` | terms the site targets |
 | `seox speed <url>` | Lighthouse scores and Core Web Vitals (local Lighthouse, or PageSpeed Insights and CrUX with a Google key) |
 | `seox ideas <keyword>` | autocomplete ideas (no volumes) |
-| `seox rank <site> <keyword>...` | positions through SearXNG (per engine, labelled "not Google" unless Google answered) |
+| `seox rank <site> <keyword>...` | positions through SearXNG (per engine, labelled "not Google" unless Google answered); queries are paced 3 s + 0-2 s jitter apart, doubled (max 30 s) if an engine rate-limits; `--gap <s>` changes it |
 | `seox authority <domain>...` | Open PageRank and Wayback |
 | `seox compare <site> <competitor>...` | side by side |
 | `seox report <site>` | one markdown note in `report_dir` |

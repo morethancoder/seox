@@ -46,7 +46,8 @@ var All = []Op{
 
 	// ---- rankings through SearXNG (area: rank)
 	{Name: "rank", Command: "rank", Short: "Where a site ranks for keywords, per search engine, through SearXNG", Kind: Read, Auth: AuthNone, Cache: "24h", Timeout: "3m",
-		Params: []Param{pSite, rest("keyword", "keyword to check"), pLang, def(p("depth", TInt, "result pages to check per keyword"), 3)}},
+		Params: []Param{pSite, rest("keyword", "keyword to check"), pLang, def(p("depth", TInt, "result pages to check per keyword"), 3),
+			p("gap", TInt, "seconds between search queries (default 3, plus 0-2 s random; 0 for none)")}},
 
 	// ---- side by side and the written note (area: report)
 	{Name: "compare", Command: "compare", Short: "Your site next to competitors: audit, speed, authority, keywords, positions", Kind: Read, Auth: AuthNone, Cache: "6h", Timeout: "10m",

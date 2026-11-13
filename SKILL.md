@@ -20,7 +20,7 @@ approximate (SearXNG is "not Google", local Lighthouse has no real-user data, id
 - `seox speed <url> [--strategy mobile|desktop|both]` with a google key: PageSpeed Insights plus CrUX; without one: local Lighthouse (needs Node and Chrome; slow, about a minute per strategy)
 - `seox ideas <keyword> [--lang en] [--country us] [--limit N]` autocomplete ideas (no volumes)
 - `seox authority <domain>...` Open PageRank and Wayback first-seen
-- `seox rank <site> <keyword>... [--lang] [--depth 3]` positions per engine through SearXNG (started and stopped by seox)
+- `seox rank <site> <keyword>... [--lang] [--depth 3] [--gap 3]` positions per engine through SearXNG (started and stopped by seox); queries are paced 3 s + 0-2 s apart and slow down on rate limits
 - `seox compare <site> <competitor>... [--kw K]... [--max N] [--depth N]` side by side
 - `seox report <site> [--competitor C]... [--kw K]... [--max N] [--out DIR]` one markdown note (never overwrites; a second run gets `-2`). With competitors and no google key it takes a few minutes, since Lighthouse runs one site at a time
 

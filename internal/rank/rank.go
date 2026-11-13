@@ -3,6 +3,7 @@ package rank
 import (
 	"context"
 	"encoding/json"
+	"math/rand"
 	"net/url"
 	"sort"
 	"strconv"
@@ -24,7 +25,9 @@ const (
 	// CacheTTL is how long a keyword's answer is reused.
 	CacheTTL = 24 * time.Hour
 	// defaultGap is the pause between queries so the upstream engines do not block us.
-	defaultGap = 1500 * time.Millisecond
+	defaultGap = 3 * time.Second
+	// maxGap caps the gap after rate-limit backoffs.
+	maxGap = 30 * time.Second
 	// assumedPage is an engine's page size when it gave nothing on an earlier page.
 	assumedPage = 10
 	maxBody     = 4 << 20
@@ -40,7 +43,7 @@ type Options struct {
 	// Instance reuses an open SearXNG (compare opens one for many calls).
 	// When nil, Positions opens one and stops it before returning.
 	Instance *Instance
-	// Gap is the pause between queries; 0 means 1.5 s, negative means none (tests).
+	// Gap is the pause between queries (plus jitter); 0 means 3 s, negative means none (tests).
 	Gap time.Duration
 }
 
@@ -136,6 +139,7 @@ func Positions(ctx context.Context, site string, keywords []string, opt Options)
 	if gap == 0 {
 		gap = defaultGap
 	}
+	pace := &pacer{gap: gap}
 	res := &Result{Site: host, Lang: opt.Lang, Depth: opt.Depth}
 	warn := newWarnSet()
 
@@ -171,7 +175,6 @@ func Positions(ctx context.Context, site string, keywords []string, opt Options)
 		}()
 	}
 
-	queried := false
 	for _, kw := range keywords {
 		kw = strings.TrimSpace(kw)
 		if kw == "" {
@@ -193,16 +196,15 @@ func Positions(ctx context.Context, site string, keywords []string, opt Options)
 		if err != nil {
 			return nil, err
 		}
-		if queried && !sleepCtx(ctx, gap) {
-			return nil, apperr.From(ctx.Err())
-		}
-		queried = true
-		kr, ws, err := search(ctx, in.URL, host, kw, opt, gap)
+		kr, ws, err := search(ctx, in.URL, host, kw, opt, pace)
 		if err != nil {
 			return nil, err
 		}
 		for _, e := range ws {
 			warn.addEngine(e[0], e[1])
+		}
+		if pace.slowed {
+			warn.add("search engines rate-limited seox; queries were slowed down (gap now " + pace.gap.String() + ")")
 		}
 		// A failed lookup (no results at all) is not cached, so the next run tries the engines again.
 		if !strings.HasPrefix(kr.Note, "no data") {
@@ -226,15 +228,15 @@ type searxResponse struct {
 }
 
 // search reads result pages 1..depth for one keyword and finds the site.
-func search(ctx context.Context, base, host, kw string, opt Options, gap time.Duration) (*KeywordResult, [][2]string, error) {
+func search(ctx context.Context, base, host, kw string, opt Options, pace *pacer) (*KeywordResult, [][2]string, error) {
 	kr := &KeywordResult{Keyword: kw, Label: "not Google"}
 	var warns [][2]string
 	seen := 0
 	// offsets[engine] is how many places the engine's earlier pages took up.
 	offsets := map[string]int{}
 	for page := 1; page <= opt.Depth; page++ {
-		if page > 1 && !sleepCtx(ctx, gap) {
-			return nil, nil, apperr.From(ctx.Err())
+		if err := pace.wait(ctx); err != nil {
+			return nil, nil, err
 		}
 		q := url.Values{"q": {kw}, "format": {"json"}, "pageno": {strconv.Itoa(page)}, "language": {opt.Lang}}
 		r, err := web.Get(ctx, base+"/search?"+q.Encode(), maxBody)
@@ -255,6 +257,7 @@ func search(ctx context.Context, base, host, kw string, opt Options, gap time.Du
 					reason = u[1]
 				}
 				warns = append(warns, [2]string{u[0], reason})
+				pace.limited(u[0], reason)
 			}
 		}
 		pageMax := map[string]int{}
@@ -374,6 +377,66 @@ func (w *warnSet) addEngine(name, reason string) {
 	w.list = append(w.list, msg)
 }
 
+// Pacing hooks; tests replace them so nothing really sleeps.
+var (
+	// jitterMax is the most random time added to each gap.
+	jitterMax = 2 * time.Second
+	sleep     = sleepCtx
+	jitter    = func(max time.Duration) time.Duration {
+		if max <= 0 {
+			return 0
+		}
+		return time.Duration(rand.Int63n(int64(max)))
+	}
+)
+
+// pacer spaces every SearXNG query of one run (all keywords and pages), since
+// the engines behind it answer a burst with CAPTCHAs or "too many requests".
+type pacer struct {
+	gap     time.Duration
+	started bool
+	slowed  bool
+	hit     map[string]bool
+}
+
+// wait blocks before every query but the first; a cancel returns the timeout code.
+func (p *pacer) wait(ctx context.Context) error {
+	if !p.started {
+		p.started = true
+		if err := ctx.Err(); err != nil {
+			return apperr.From(err)
+		}
+		return nil
+	}
+	d := p.gap
+	if d >= 0 {
+		d += jitter(jitterMax)
+	}
+	if !sleep(ctx, d) {
+		return apperr.From(ctx.Err())
+	}
+	return nil
+}
+
+// limited doubles the gap (up to maxGap) the first time an engine reports a
+// rate limit or CAPTCHA; later "Suspended" repeats of the same engine are the same failure.
+func (p *pacer) limited(engine, reason string) {
+	r := strings.ToLower(reason)
+	if !(strings.Contains(r, "too many") || strings.Contains(r, "captcha") ||
+		strings.Contains(r, "rate limit") || strings.Contains(r, "429")) {
+		return
+	}
+	if p.hit == nil {
+		p.hit = map[string]bool{}
+	}
+	if p.hit[engine] || p.gap < 0 {
+		return
+	}
+	p.hit[engine] = true
+	p.gap = min(p.gap*2, maxGap)
+	p.slowed = true
+}
+
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	if d < 0 {
 		return ctx.Err() == nil
@@ -394,6 +457,7 @@ func handle(ctx context.Context, in ops.Input) (*ops.Result, error) {
 		Lang:    in.Str("lang"),
 		Depth:   in.Int("depth", DefaultDepth),
 		NoCache: in.NoCache,
+		Gap:     gapOption(in),
 	})
 	if err != nil {
 		return nil, err
@@ -408,4 +472,16 @@ func handle(ctx context.Context, in ops.Input) (*ops.Result, error) {
 	}
 	meta.Cached = all
 	return &ops.Result{Data: res, Meta: meta, Warnings: res.Warnings}, nil
+}
+
+// gapOption reads --gap (whole seconds); 0 means no pause, absent keeps the default.
+func gapOption(in ops.Input) time.Duration {
+	if !in.Has("gap") {
+		return 0
+	}
+	n := in.Int("gap", int(defaultGap/time.Second))
+	if n <= 0 {
+		return -1
+	}
+	return time.Duration(n) * time.Second
 }
