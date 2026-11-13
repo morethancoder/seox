@@ -7,6 +7,7 @@ Every command works with no account and no key. Keys and sign-in only add data; 
 says what each one adds.
 
 ```
+go install github.com/morethancoder/seox/cmd/seox@latest   # or, from a clone:
 make install        # puts seox in ~/go/bin
 seox schema         # every command, its arguments and exit codes, as JSON
 seox doctor         # state of every source, with a fix for each
@@ -48,3 +49,7 @@ State lives in `$SEOX_HOME` (default `~/.seox`). Keys go in the macOS Keychain
 | SearXNG (Arshafa's install, or `searxng_url`) | `rank` and report positions are skipped | positions per engine; seox starts and stops its own copy |
 | Open PageRank key (free) | authority score is "no data"; Wayback still works | a 0-10 authority estimate |
 | Google sign-in or Bing key | no real rankings | `mine` and the report's real rankings for sites you verified |
+
+## License
+
+MIT, see [LICENSE](LICENSE).
