@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"golang.org/x/term"
 
@@ -194,7 +195,7 @@ func gather(parent context.Context, o gatherOpts) (*gathered, error) {
 				sd.warns = append(sd.warns, sd.Domain+": "+w)
 			}
 			if i == 0 && o.ideas {
-				g.ideas = runIdeas(ctx, sd.kw, o.noCache, &wg)
+				g.ideas = runIdeas(ctx, sd.kw, sd.Domain, o.noCache, &wg)
 			}
 		}(i, sd)
 	}
@@ -270,23 +271,69 @@ func gather(parent context.Context, o gatherOpts) (*gathered, error) {
 	return g, nil
 }
 
-// runIdeas asks for ideas on the top 3 target keywords. wg is the caller's
-// group: the counter is above zero while the caller runs, so Add is safe.
-func runIdeas(ctx context.Context, kw *site.KeywordsResult, noCache bool, wg *sync.WaitGroup) []ideasFor {
-	var terms []string
-	for _, k := range kw.Keywords {
-		if len(terms) == 3 {
-			break
-		}
-		terms = append(terms, k.Term)
+// brandOf is the domain name without its TLD ("powertelebot" for
+// powertelebot.com), used to keep the site's own name out of the ideas terms.
+func brandOf(domain string) string {
+	d := strings.TrimPrefix(strings.ToLower(domain), "www.")
+	if i := strings.Index(d, "."); i > 0 {
+		d = d[:i]
 	}
+	return d
+}
+
+// pickIdeasTerms chooses up to 3 terms for ideas, in score order: phrases of
+// 2-3 words first, single words only to fill the gap. A generic single word
+// gives off-topic autocomplete, and the brand name only finds the brand.
+func pickIdeasTerms(terms []site.SiteKeyword, brand string) []string {
+	var phrases, singles []string
+	for _, k := range terms {
+		t := strings.TrimSpace(k.Term)
+		if t == "" || (brand != "" && strings.ReplaceAll(strings.ToLower(t), " ", "") == brand) {
+			continue
+		}
+		if strings.IndexFunc(t, unicode.IsDigit) >= 0 {
+			continue // dates and counts ("16 октября 2026") make poor ideas seeds
+		}
+		switch n := len(strings.Fields(t)); {
+		case n >= 2 && n <= 3:
+			phrases = append(phrases, t)
+		case n == 1:
+			singles = append(singles, t)
+		}
+	}
+	out := append(phrases, singles...)
+	if len(out) > 3 {
+		out = out[:3]
+	}
+	return out
+}
+
+// ideasLang is the suggest language for a term's script: Arabic or Cyrillic
+// letters pick "ar" or "ru"; anything else is "" so Ideas keeps its default.
+func ideasLang(term string) string {
+	for _, r := range term {
+		switch {
+		case unicode.Is(unicode.Arabic, r):
+			return "ar"
+		case unicode.Is(unicode.Cyrillic, r):
+			return "ru"
+		}
+	}
+	return ""
+}
+
+// runIdeas asks for ideas on the top 3 target keywords (see pickIdeasTerms).
+// wg is the caller's group: the counter is above zero while the caller runs,
+// so Add is safe.
+func runIdeas(ctx context.Context, kw *site.KeywordsResult, domain string, noCache bool, wg *sync.WaitGroup) []ideasFor {
+	terms := pickIdeasTerms(kw.Keywords, brandOf(domain))
 	out := make([]ideasFor, len(terms))
 	for i, t := range terms {
 		out[i].Keyword = t
 		wg.Add(1)
 		go func(i int, t string) {
 			defer wg.Done()
-			out[i].Res, out[i].Err = dep.ideas(ctx, t, signals.IdeasOptions{NoCache: noCache, Limit: 10})
+			out[i].Res, out[i].Err = dep.ideas(ctx, t, signals.IdeasOptions{Lang: ideasLang(t), NoCache: noCache, Limit: 10})
 		}(i, t)
 	}
 	return out

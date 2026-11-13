@@ -103,6 +103,16 @@ func TestTokeniseAndWeights(t *testing.T) {
 	if !isStop("في") || !isStop("هذا") {
 		t.Error("Arabic stopwords")
 	}
+	for _, w := range []string{"как", "для", "что", "это", "при", "или", "всё"} {
+		if !isStop(w) {
+			t.Errorf("Russian stopword %q", w)
+		}
+	}
+	for _, w := range []string{"бот", "телеграм", "bot"} {
+		if isStop(w) {
+			t.Errorf("%q is not a stopword", w)
+		}
+	}
 	terms := a.top(10)
 	var names []string
 	for _, x := range terms {

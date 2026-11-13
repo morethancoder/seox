@@ -345,7 +345,7 @@ func renderNote(g *gathered, o gatherOpts, date string, actions []Action) string
 	if len(g.ideas) == 0 {
 		w("No target keywords were found to expand.\n\n")
 	}
-	w("Ideas are search-box autocomplete suggestions: no search volumes, so they show what people type, not how often.\n\n")
+	w("Ideas are search-box autocomplete suggestions for the top 2-3 word phrases (single words only when there are too few phrases; the site's own name is skipped), in the language of the term's script: no search volumes, so they show what people type, not how often.\n\n")
 	for _, id := range g.ideas {
 		w("### %s\n\n", cell(id.Keyword))
 		if id.Err != nil {

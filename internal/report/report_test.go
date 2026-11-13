@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -362,5 +363,51 @@ func TestSpeedSourceLabel(t *testing.T) {
 		if got := summariseSpeed(c.sp).Source; !strings.Contains(got, c.want) {
 			t.Errorf("source %q, want it to contain %q", got, c.want)
 		}
+	}
+}
+
+func TestPickIdeasTerms(t *testing.T) {
+	mk := func(ts ...string) []site.SiteKeyword {
+		var out []site.SiteKeyword
+		for _, s := range ts {
+			out = append(out, site.SiteKeyword{Term: s})
+		}
+		return out
+	}
+	got := pickIdeasTerms(mk("bot", "powertelebot", "telegram bot", "power tele bot", "auto reply", "one two three", "x y z w", "16 октября 2026", "menu"), "powertelebot")
+	want := []string{"telegram bot", "auto reply", "one two three"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("phrases first, brand skipped, 3 max: got %v", got)
+	}
+	got = pickIdeasTerms(mk("bot", "telegram bot", "menu", "chat"), "x")
+	if !reflect.DeepEqual(got, []string{"telegram bot", "bot", "menu"}) {
+		t.Errorf("singles fill the gap: got %v", got)
+	}
+}
+
+func TestIdeasLang(t *testing.T) {
+	for term, want := range map[string]string{"تليجرام": "ar", "телеграм бот": "ru", "telegram bot": "", "bot ботик": "ru"} {
+		if got := ideasLang(term); got != want {
+			t.Errorf("ideasLang(%q) = %q, want %q", term, got, want)
+		}
+	}
+}
+
+func TestRunIdeasPassesLang(t *testing.T) {
+	d := setup(t)
+	var mu sync.Mutex
+	langs := map[string]string{}
+	d.ideas = func(_ context.Context, kw string, o signals.IdeasOptions) (*signals.IdeasResult, error) {
+		mu.Lock()
+		langs[kw] = o.Lang
+		mu.Unlock()
+		return &signals.IdeasResult{Keyword: kw}, nil
+	}
+	var wg sync.WaitGroup
+	kw := &site.KeywordsResult{Keywords: []site.SiteKeyword{{Term: "تليجرام بوت"}, {Term: "телеграм бот"}, {Term: "telegram bot"}}}
+	runIdeas(context.Background(), kw, "powertelebot.com", false, &wg)
+	wg.Wait()
+	if langs["تليجرام بوت"] != "ar" || langs["телеграм бот"] != "ru" || langs["telegram bot"] != "" {
+		t.Errorf("langs %v", langs)
 	}
 }
