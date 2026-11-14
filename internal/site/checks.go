@@ -104,12 +104,7 @@ func analyse(cr *CrawlResult, scope pageScope) ([]Issue, int, []string) {
 		timedOut, timedOutDetail, timedOutPages                               []string
 	)
 	titles, descs := map[string][]string{}, map[string][]string{}
-	anyHreflang := false
-	for _, p := range pages {
-		if len(p.Hreflangs) > 0 {
-			anyHreflang = true
-		}
-	}
+	hrefTargets, langPrefixes := hreflangIndex(pages)
 	var noHreflang []string
 	for _, p := range pages {
 		u := p.URL
@@ -245,7 +240,7 @@ func analyse(cr *CrawlResult, scope pageScope) ([]Issue, int, []string) {
 			noViewport = append(noViewport, u)
 		}
 		checkHreflang(p, &badHreflang, &noSelfHreflang, &hreflangDetail)
-		if anyHreflang && len(p.Hreflangs) == 0 {
+		if len(p.Hreflangs) == 0 && hasTranslation(p, byKey, hrefTargets, langPrefixes) {
 			noHreflang = append(noHreflang, u)
 		}
 		// ---- links
@@ -323,7 +318,7 @@ func analyse(cr *CrawlResult, scope pageScope) ([]Issue, int, []string) {
 	b.pages("viewport-missing", Medium, "The page has no viewport meta tag", "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">.", noViewport, nil)
 	b.pages("hreflang-invalid", Medium, "An hreflang value or URL is invalid", "Use language codes like en or en-GB (or x-default) and absolute URLs.", badHreflang, hreflangDetail)
 	b.pages("hreflang-no-self", Low, "The hreflang set does not include the page itself", "Add a self-referencing hreflang entry.", noSelfHreflang, nil)
-	b.pages("hreflang-missing", Low, "Other pages use hreflang but this one does not", "Add hreflang links to this page's translations.", noHreflang, nil)
+	b.pages("hreflang-missing", Low, "This page has a translation on the site but declares no hreflang", "Add hreflang links to this page's translations.", noHreflang, nil)
 	b.pages("response-slow", Low, "The server took over 2 seconds to answer", "Look at hosting, caching and server work for this URL.", slow, nil)
 
 	if scope == scopeSite {
@@ -542,4 +537,89 @@ func rankIssues(list []*Issue, pagesCrawled int) ([]Issue, int) {
 		score = 100
 	}
 	return out, score
+}
+
+// hreflangIndex collects every URL some page lists in its hreflang (keyed by
+// dedupKey, with the listing page remembered) and the language path prefixes
+// the site uses. A prefix is learnt only from a declared hreflang whose URL
+// starts with its own language code, e.g. ru -> /ru/..., so unrelated first
+// path segments such as /blog/ are never mistaken for a language.
+func hreflangIndex(pages []*Page) (map[string]map[string]bool, map[string]bool) {
+	targets := map[string]map[string]bool{}
+	prefixes := map[string]bool{}
+	for _, p := range pages {
+		for _, h := range p.Hreflangs {
+			n, ok := normalizeURL(h.Href)
+			if !ok {
+				continue
+			}
+			k := dedupKey(n)
+			if targets[k] == nil {
+				targets[k] = map[string]bool{}
+			}
+			targets[k][dedupKey(p.URL)] = true
+			hu, err := url.Parse(n)
+			if err != nil {
+				continue
+			}
+			seg := firstSegment(hu.EscapedPath())
+			lang := strings.ToLower(h.Lang)
+			if seg != "" && (strings.ToLower(seg) == lang || strings.ToLower(seg) == strings.SplitN(lang, "-", 2)[0]) {
+				prefixes[strings.ToLower(seg)] = true
+			}
+		}
+	}
+	return targets, prefixes
+}
+
+func firstSegment(path string) string {
+	return strings.SplitN(strings.TrimPrefix(path, "/"), "/", 2)[0]
+}
+
+// hasTranslation reports whether a page that declares no hreflang has a
+// translation on the crawled site: the same path under another language
+// prefix (or none, for the default language), or another page naming this
+// page in its hreflang. Posts written per language have neither, so they are
+// not flagged.
+func hasTranslation(p *Page, byKey map[string]*Page, targets map[string]map[string]bool, prefixes map[string]bool) bool {
+	self := dedupKey(p.URL)
+	for from := range targets[self] {
+		if from != self {
+			return true
+		}
+	}
+	u, err := url.Parse(p.URL)
+	if err != nil {
+		return false
+	}
+	path := u.EscapedPath()
+	rest := path
+	if seg := firstSegment(path); prefixes[strings.ToLower(seg)] {
+		rest = strings.TrimPrefix(path, "/"+seg)
+		if rest == "" {
+			rest = "/"
+		}
+	}
+	try := func(pre string) bool {
+		c := *u
+		c.RawQuery = ""
+		if pre == "" {
+			c.Path, c.RawPath = rest, ""
+		} else if rest == "/" {
+			c.Path, c.RawPath = "/"+pre+"/", ""
+		} else {
+			c.Path, c.RawPath = "/"+pre+rest, ""
+		}
+		k := dedupKey(c.String())
+		return k != self && byKey[k] != nil
+	}
+	if try("") {
+		return true
+	}
+	for pre := range prefixes {
+		if try(pre) {
+			return true
+		}
+	}
+	return false
 }
